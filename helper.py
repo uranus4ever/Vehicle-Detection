@@ -10,9 +10,10 @@ import time
 from sklearn.svm import LinearSVC
 from scipy.ndimage.measurements import label
 import glob
+import pickle
 
 
-def draw_boxes(img, bboxes, color=(0,0,255), thickness=6):
+def draw_boxes(img, bboxes, color=(0, 0, 255), thickness=6):
     imgcopy = np.copy(img)
     for bbox in bboxes:
         cv2.rectangle(imgcopy, bbox[0], bbox[1], color, thickness)
@@ -27,20 +28,23 @@ def color_hist(img, nbins=32, bins_range=(0, 256), plot=False):
     # Concatenate the histograms into a single feature vector
     hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
 
+    bin_edges = channel1_hist[1]
+    bin_centers = (bin_edges[1:] + bin_edges[0:len(bin_edges) - 1]) / 2
+
     if plot:
         fig = plt.figure(figsize=(12, 3))
         plt.subplot(131)
-        plt.bar(bin_centers, rhist[0])
+        plt.bar(bin_centers, channel1_hist[0])
         plt.xlim(0, 256)
-        plt.title('R Histogram')
+        plt.title('Channel 1 Histogram')
         plt.subplot(132)
-        plt.bar(bin_centers, ghist[0])
+        plt.bar(bin_centers, channel2_hist[0])
         plt.xlim(0, 256)
-        plt.title('G Histogram')
+        plt.title('Channel 2 Histogram')
         plt.subplot(133)
-        plt.bar(bin_centers, bhist[0])
+        plt.bar(bin_centers, channel3_hist[0])
         plt.xlim(0, 256)
-        plt.title('B Histogram')
+        plt.title('Channel 3 Histogram')
 
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
@@ -307,8 +311,12 @@ def extract_features(imgs, cspace='RGB', orient=9,
     # Return list of feature vectors
     return features
 
+
+def combine_feature():
     # Divide up into cars and notcars
-    images = glob.glob('*.jpeg')
+    # cars and notcars are png pic
+    # mpimg.imread returns 0-1; cv2.imread returns 0-255
+    images = glob.glob('./test_img/*.jpeg')
     cars = []
     notcars = []
     for image in images:
@@ -648,4 +656,10 @@ def apply_threshold(heatmap, threshold):
 
 
 if __name__ == "__main__":
-    image = mpimg.imread('cutout1.jpg')
+    image = mpimg.imread('./test_img/cutout1.jpg')
+
+    # feature_vec = bin_spatial(image, color_space='RGB', size=(32, 32))
+    #
+    # # Plot features
+    # plt.plot(feature_vec)
+    # plt.title('Spatially Binned Features')
