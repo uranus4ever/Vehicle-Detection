@@ -11,6 +11,7 @@ from sklearn.svm import LinearSVC
 from scipy.ndimage.measurements import label
 import glob
 import pickle
+from sklearn.utils import shuffle
 
 
 def draw_boxes(img, bboxes, color=(0, 0, 255), thickness=6):
@@ -420,7 +421,9 @@ def SVM_combine_classify(cars, notcars, samples=300):
     rand_state = np.random.randint(0, 100)
     X_train, X_test, y_train, y_test = train_test_split(
         scaled_X, y, test_size=0.2, random_state=rand_state)
+    X_train, y_train = shuffle(X_train, y_train)
 
+    print('Training pic num:   ', len(y_train))
     print('Using spatial binning of:', spatial,
           'and', histbin, 'histogram bins')
     print('Using:', orient, 'orientations', pix_per_cell,
@@ -436,12 +439,12 @@ def SVM_combine_classify(cars, notcars, samples=300):
     # Check the score of the SVC
     print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
     # Check the prediction time for a single sample
-    t = time.time()
-    n_predict = 10
-    print('My SVC predicts:     ', svc.predict(X_test[0:n_predict]))
-    print('For these', n_predict, 'labels: ', y_test[0:n_predict])
-    t2 = time.time()
-    print(round(t2 - t, 5), 'Seconds to predict', n_predict, 'labels with SVC')
+    t3 = time.time()
+    n_predict = 15
+    print('My SVC predicts:     ', svc.predict(X_test[100:n_predict]))
+    print('For these', n_predict, 'labels: ', y_test[100:n_predict])
+    t4 = time.time()
+    print(round(t4 - t3, 5), 'Seconds to predict', n_predict, 'labels with SVC')
 
     dist = {'svc': svc,
             'X_scaler': X_scaler,
@@ -449,7 +452,9 @@ def SVM_combine_classify(cars, notcars, samples=300):
             'pix_per_cell': pix_per_cell,
             'cell_per_block': cell_per_block,
             'spatial_size': (spatial, spatial),
-            'hist_bins': histbin}
+            'hist_bins': histbin,
+            'Test Accuracy': round(svc.score(X_test, y_test), 4),
+            'Training Time': round(t2 - t, 2)}
 
     return dist
 
@@ -581,9 +586,8 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
 
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, ystart=400, ystop=656, scale=1.5, plot=False):
+def find_cars(img, dist_pickle, ystart=400, ystop=656, scale=1.5, plot=False):
 
-    dist_pickle = pickle.load(open("dist.p", "rb"))
     svc = dist_pickle["svc"]
     X_scaler = dist_pickle["X_scaler"]
     orient = dist_pickle["orient"]
@@ -622,6 +626,8 @@ def find_cars(img, ystart=400, ystop=656, scale=1.5, plot=False):
     hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
+    bbox_list = []
+
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb * cells_per_step
@@ -654,15 +660,16 @@ def find_cars(img, ystart=400, ystop=656, scale=1.5, plot=False):
                 win_draw = np.int(window * scale)
                 cv2.rectangle(draw_img, (xbox_left, ytop_draw + ystart),
                               (xbox_left + win_draw, ytop_draw + win_draw + ystart), (0, 0, 255), 6)
+                bbox_list.append(((xbox_left, ytop_draw + ystart), (xbox_left + win_draw, ytop_draw + win_draw + ystart)))
 
     if plot is True:
         plt.figure()
         plt.imshow(draw_img)
         plt.show()
-    return draw_img
+    return bbox_list, draw_img
 
 
-def draw_labeled_bboxes(img, labels, plot=False):
+def draw_labeled_bboxes(img, labels):
     # Iterate through all detected cars
     for car_number in range(1, labels[1]+1):
         # Find pixels with each car_number label value
@@ -673,31 +680,8 @@ def draw_labeled_bboxes(img, labels, plot=False):
         # Define a bounding box based on min/max x and y
         bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
         # Draw the box on the image
-        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
-    # Return the image
+        cv2.rectangle(img, bbox[0], bbox[1], (0, 0, 255), 6)
 
-    if plot is True:
-        box_list = pickle.load(open("bbox_pickle.p", "rb"))
-
-        # Read in image similar to one shown above
-        image = mpimg.imread('test_image.jpg')
-        heat = np.zeros_like(image[:, :, 0]).astype(np.float)
-        # Add heat to each box in box list
-        heat = add_heat(heat, box_list)
-        # Apply threshold to help remove false positives
-        heat = apply_threshold(heat, 1)
-        # Visualize the heatmap when displaying
-        heatmap = np.clip(heat, 0, 255)
-        # Find final boxes from heatmap using label function
-        labels = label(heatmap)
-        fig = plt.figure()
-        plt.subplot(121)
-        plt.imshow(img)
-        plt.title('Car Positions')
-        plt.subplot(122)
-        plt.imshow(heatmap, cmap='hot')
-        plt.title('Heat Map')
-        fig.tight_layout()
     return img
 
 
@@ -719,15 +703,72 @@ def apply_threshold(heatmap, threshold):
     return heatmap
 
 
+def visualize(img):
+    bbox_list, img_multibox = find_cars(img, dist_pickle, plot=False)
+
+    heat = np.zeros_like(img[:, :, 0]).astype(np.float)
+    # Add heat to each box in box list
+    heat = add_heat(heat, bbox_list)
+    # Visualize the heatmap when displaying
+    heatmap = np.clip(heat, 0, 255)
+    # Find final boxes from heatmap using label function
+    labels = label(heatmap)
+    draw_img = draw_labeled_bboxes(np.copy(img), labels)
+
+    fig = plt.figure(figsize=(10, 4))
+    plt.subplot(131)
+    plt.imshow(img_multibox)
+    plt.title('Multi Detections')
+    plt.subplot(132)
+    plt.imshow(heatmap, cmap='hot')
+    plt.title('Heat Map')
+    plt.subplot(133)
+    plt.imshow(draw_img)
+    plt.title('Car Positions')
+    fig.tight_layout()
+
+    return
+
+
+def multi_heatmap():
+    img1 = mpimg.imread('./test_img/test4.jpg')
+    img2 = mpimg.imread('./test_img/test5.jpg')
+    imgs = [img1, img2]
+    drawings = []
+    for img in imgs:
+        bbox_list, img_multibox = find_cars(img, dist_pickle, plot=False)
+
+        heat = np.zeros_like(img[:, :, 0]).astype(np.float)
+        # Add heat to each box in box list
+        heat = add_heat(heat, bbox_list)
+        # Visualize the heatmap when displaying
+        heatmap = np.clip(heat, 0, 255)
+
+        drawings.append(heatmap)
+
+    merge_heat = drawings[0] + drawings[1]
+
+    fig = plt.figure(figsize=(10, 4))
+    plt.subplot(131)
+    plt.imshow(drawings[0], cmap='hot')
+    plt.title('test4_heat')
+    plt.subplot(132)
+    plt.imshow(drawings[1], cmap='hot')
+    plt.title('test5_heat')
+    plt.subplot(133)
+    plt.imshow(merge_heat, cmap='hot')
+    plt.title('Merge')
+    fig.tight_layout()
+
 if __name__ == "__main__":
     img = mpimg.imread('./test_img/test6.jpg')
 
-    scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
+    # scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
+    #
+    # dist = SVM_combine_classify(cars, notcars, samples=8000)
+    # pickle.dump(dist, open("./dist.p", "wb"))
 
-    dist = SVM_combine_classify(cars, notcars, samples=-1)
-    pickle.dump(dist, open("./dist.p", "wb"))
-
-    im = find_cars(img, plot=True)
+    dist_pickle = pickle.load(open("dist.p", "rb"))
 
     # feature_vec = bin_spatial(image, color_space='RGB', size=(32, 32))
     #
