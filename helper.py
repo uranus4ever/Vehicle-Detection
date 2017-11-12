@@ -226,7 +226,7 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
     return features
 
 
-def combine_feature(cspace='HSV', samples=100, plot=False):
+def combine_feature(cspace='LUV', samples=100, plot=False):
     # Divide up into cars and notcars
     # cars and notcars are png pic
     # mpimg.imread returns 0-1; cv2.imread returns 0-255
@@ -388,11 +388,11 @@ def SVM_HOG_classify(cars, notcars, samples=300):
     return dist
 
 
-def SVM_combine_classify(cars, notcars, samples=300):
+def SVM_combine_classify(cars, notcars, csapce='LUV', samples=300):
     spatial = 32
     histbin = 32
-    color_space = 'YUV'  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-    orient = 9
+    color_space = csapce  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+    orient = 15
     pix_per_cell = 8
     cell_per_block = 2
 
@@ -419,9 +419,9 @@ def SVM_combine_classify(cars, notcars, samples=300):
 
     # Split up data into randomized training and test sets
     rand_state = np.random.randint(0, 100)
+    scaled_X, y = shuffle(scaled_X, y)
     X_train, X_test, y_train, y_test = train_test_split(
         scaled_X, y, test_size=0.2, random_state=rand_state)
-    X_train, y_train = shuffle(X_train, y_train)
 
     print('Training pic num:   ', len(y_train))
     print('Using spatial binning of:', spatial,
@@ -441,8 +441,8 @@ def SVM_combine_classify(cars, notcars, samples=300):
     # Check the prediction time for a single sample
     t3 = time.time()
     n_predict = 15
-    print('My SVC predicts:     ', svc.predict(X_test[100:n_predict]))
-    print('For these', n_predict, 'labels: ', y_test[100:n_predict])
+    print('My SVC predicts:     ', svc.predict(X_test[0:n_predict]))
+    print('For these', n_predict, 'labels: ', y_test[0:n_predict])
     t4 = time.time()
     print(round(t4 - t3, 5), 'Seconds to predict', n_predict, 'labels with SVC')
 
@@ -601,6 +601,7 @@ def find_cars(img, dist_pickle, ystart=400, ystop=656, scale=1.5, plot=False):
 
     img_tosearch = img[ystart:ystop, :, :]
     ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YUV')
+    cspace = 'YUV'
     if scale != 1:
         imshape = ctrans_tosearch.shape
         ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1] / scale), np.int(imshape[0] / scale)))
@@ -645,7 +646,7 @@ def find_cars(img, dist_pickle, ystart=400, ystop=656, scale=1.5, plot=False):
             subimg = cv2.resize(ctrans_tosearch[ytop:ytop + window, xleft:xleft + window], (64, 64))
 
             # Get color features
-            spatial_features = bin_spatial(subimg, size=spatial_size)
+            spatial_features = bin_spatial(subimg, color_space=cspace, size=spatial_size)
             hist_features = color_hist(subimg, nbins=hist_bins)
 
             # Scale features and make a prediction
@@ -703,7 +704,7 @@ def apply_threshold(heatmap, threshold):
     return heatmap
 
 
-def visualize(img):
+def visualize(img, dist_pickle):
     bbox_list, img_multibox = find_cars(img, dist_pickle, plot=False)
 
     heat = np.zeros_like(img[:, :, 0]).astype(np.float)
@@ -730,7 +731,7 @@ def visualize(img):
     return
 
 
-def multi_heatmap():
+def multi_heatmap(dist_pickle):
     img1 = mpimg.imread('./test_img/test4.jpg')
     img2 = mpimg.imread('./test_img/test5.jpg')
     imgs = [img1, img2]
@@ -760,15 +761,51 @@ def multi_heatmap():
     plt.title('Merge')
     fig.tight_layout()
 
+
+def add_non_car():
+    input_path = './test_img/add_non-car_source_size/'
+    output_path = './test_img/add_non-car_64/'
+    images = glob.glob(input_path + '*.png')
+    flags = []
+
+    for img_path in images:
+        img = cv2.imread(img_path)
+        img_resize = cv2.resize(img, (64, 64))
+        filename = img_path.split('\\')[-1]
+        flag = cv2.imwrite(output_path+filename, img_resize)
+        flags.append(flag)
+    return flags
+
+
+def predict(dist_pickle):
+    svc = dist_pickle["svc"]
+    X_scaler = dist_pickle["X_scaler"]
+    input_path = './test_img/add_non-car_64/'
+    images = glob.glob(input_path + '*.png')
+    preds = []
+    for img_path in images:
+        img = mpimg.imread(img_path)
+        spatial_features = bin_spatial(img, color_space='LUV', size=32)
+        hist_features = color_hist(img, nbins=32)
+        convert_img = convert_color(img, 'RGB2LUV')
+        hog_features = get_hog_features(convert_img, feature_vec=False)
+        test_features = X_scaler.transform(
+            np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
+        test_prediction = svc.predict(test_features)
+        preds.append(test_prediction)
+    print('Prediction:     ', preds)
+    return
+
 if __name__ == "__main__":
     img = mpimg.imread('./test_img/test6.jpg')
 
-    # scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
-    #
-    # dist = SVM_combine_classify(cars, notcars, samples=8000)
-    # pickle.dump(dist, open("./dist.p", "wb"))
+    scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
 
-    dist_pickle = pickle.load(open("dist.p", "rb"))
+    dist = SVM_combine_classify(cars, notcars, csapce='YUV', samples=-1)
+    pickle.dump(dist, open("./dist.p", "wb"))
+    print('pickle saved!')
+
+    # dist_pickle = pickle.load(open("dist.p", "rb"))
 
     # feature_vec = bin_spatial(image, color_space='RGB', size=(32, 32))
     #
