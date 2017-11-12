@@ -7,7 +7,7 @@ from collections import deque
 from helper import *
 
 
-def process_image(image, heat_thres=1):
+def process_image(image, heat_thres=2):
     global dist_pickle
     boxes = []
 
@@ -63,12 +63,12 @@ clip1 = VideoFileClip(input_path)
 # clip1 = VideoFileClip(input_path).subclip(4, 16)
 
 t = time.time()
-# final_clip = clip1.fl_image(process_image)
-# final_clip.write_videofile(video_output, audio=False)
+final_clip = clip1.fl_image(process_image)
+final_clip.write_videofile(video_output, audio=False)
 t2 = time.time()
 print(round(t2 - t, 2), 'Seconds to process video...')
 
-image = mpimg.imread('./test_img/test5.jpg')
-plt.figure()
-plt.imshow(process_image(image, heat_thres=1))
-plt.show()
+# image = mpimg.imread('./test_img/test5.jpg')
+# plt.figure()
+# plt.imshow(process_image(image, heat_thres=1))
+# plt.show()
