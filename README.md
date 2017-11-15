@@ -23,13 +23,13 @@ Vehicle detection used machine learning and computer vision techniques, and comb
 
 The steps of this project are the following:
 
-**SVM**
+**1) SVM**
 
  - Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier.
  - Implement an effiecient sliding-window technique and use  trained SVM classifier to search for vehicles in images.
  - Run your pipeline on a video stream and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles. [see full video][video-SVM]
 
-**YOLO**
+**2) YOLO**
 
  - Construct a Keras network and implement a pre-trained model to predict in images.
  - Run a pipeline on a video stream and create a console to monitor lane status and detections. [see full video][video-yolo]
@@ -51,12 +51,12 @@ The steps of this project are the following:
 
 ---
 
-### SVM Algorithm
+### **1) SVM Algorithm**
 
 SVM (Support Vector Machine) is a powerful machine learning technique. Here in this project it is trained and used for classification of car and not-car.
 
 #### 1. Collecting data
-My training data is mainly downloaded from [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html) and [KITTI vision benchmark](http://www.cvlibs.net/datasets/kitti/) websites, which contain about 8700 pictures of car and 8900 of not-car. In addition, in order to increase detection accurancy, I create multiple not-car pics from video.
+My main training data is downloaded from [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html) and [KITTI vision benchmark](http://www.cvlibs.net/datasets/kitti/) websites, which contain about 8700 pictures of car and 8900 of not-car. In addition, in order to increase detection accurancy, I create about 20 not-car pictures from video.
 
 ![car and not-car][img1]
 
@@ -128,9 +128,9 @@ Here's an example result showing the heatmap from a series of frames of video, t
 ### Here the resulting bounding boxes are drawn onto the last frame in the series:
 ![alt text][image7]
 
-### YOLO
+### **2) YOLO Algorithm**
 
-[YOLO](https://arxiv.org/pdf/1506.02640) (You Look Only Once) is a popular end-to-end **Real-time Object Detection** algorith based on deep learning. Compared with other object recognition method, such as Fast R-CNN, YOLO integrates target area and object classification into a single neural network. The most outstanding point is its fast speed with preferably high accuracy, nearly 45 fps of base version and up to 155 fps in FastYOLO, quite favourable for real-time applications, for example, computer vision of self-driving car.
+[YOLO](https://arxiv.org/pdf/1506.02640) (You Look Only Once) is a popular end-to-end **Real-time Object Detection** algorithm based on deep learning. Compared with other object recognition methods, such as Fast R-CNN, YOLO integrates target area and object classification into a single neural network. The most outstanding point is its fast speed with preferably high accuracy, nearly 45 fps in base version and up to 155 fps in FastYOLO, quite favourable for real-time applications, for example, computer vision of self-driving car.
 
 #### 1. Principle
 
