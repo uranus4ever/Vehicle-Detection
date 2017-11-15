@@ -5,3 +5,5 @@
 /test_img/
 /input_videos/
 /reference/
+/weights/
+*.xlsx
