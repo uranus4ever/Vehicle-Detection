@@ -1,6 +1,5 @@
 ﻿# **Vehicle Detection Project**
 
-
 ## Overview
 
 Vehicle detection project used machine learning and computer vision techniques, and combined [advanced lane detection](https://github.com/uranus4ever/Advanced-Lane-Detection) techniques.
@@ -49,14 +48,14 @@ My main training data is downloaded from [GTI vehicle image database](http://www
 
 I explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`) and made a comparison.
 
-
 | Color Space | Accuracy | Training Time (CPU) |
-|:--:|:--:|:--:|:--:|
+|:--:|:--:|:--:|
 | YUV | 97.75% | 65 s |
 | YCrCb | 98.11% | 51 s |
 | LUV | 98.23% | 59 s |
 | HLS | 98% | 60 s |
 | HSV | 97.8% | 112 s |
+
 
 The above table indicates that accuracy performance in different color space are almost same. Considering less false-positive, I chose `YUV` to extract color features.
 
@@ -303,7 +302,6 @@ After weight loading, detected bounding boxes could be draw onto the images and 
 
 ![find_car][img9]
 
----
 
 ## Reflection
 
@@ -337,12 +335,11 @@ Note that the limitation of YOLO is as follows:
 
 [//]: # (Image References)
 [img1]: ./Image/car_not_car.PNG
-[img2]: ./Image/feature.jpg
+[img2]: ./Image/feature.png
 [img3]: ./Image/Normalize_Feature_HSV.png
 [img4]: ./Image/find_car.png
 [img5]: ./Image/heatmap1.png
 [img6]: ./Image/heatmap.png
-[img7]: 
 [img8]: ./Image/yolo-box.PNG
 [img9]: ./Image/find_car_yolo.png
 [gif]: ./Image/yolo.gif
