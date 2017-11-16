@@ -1,45 +1,30 @@
 ﻿# **Vehicle Detection Project**
 
-[//]: # (Image References)
-[img1]: ./Image/car_not_car.png
-[img2]: ./Image/HOG_example.jpg
-[img3]: ./Image/sliding_windows.jpg
-[img4]: ./Image/sliding_window.jpg
-[img5]: ./Image/bboxes_and_heat.png
-[img6]: ./Image/labels_map.png
-[img7]: ./Image/output_bboxes.png
-[img8]: ./Image/yolo-box.PNG
-[img9]: ./Image/find_car_yolo.png
-[gif]: ./Image/yolo.gif
-[video-SVM]: ./project_video.mp4
-[video-yolo]: ./project_video.mp4
 
----
 ## Overview
 
-Vehicle detection used machine learning and computer vision techniques, and combined [advanced lane detection](https://github.com/uranus4ever/Advanced-Lane-Detection) techniques in my previous project.
+Vehicle detection project used machine learning and computer vision techniques, and combined [advanced lane detection](https://github.com/uranus4ever/Advanced-Lane-Detection) techniques.
 
 ![yolo-gif][gif]
 
-The steps of this project are the following:
+I applied two different methods for detection. The steps of this project are the following:
 
-**1) SVM**
+**1) SVM Algorithm**
 
  - Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier.
  - Implement an effiecient sliding-window technique and use  trained SVM classifier to search for vehicles in images.
- - Run your pipeline on a video stream and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles. [see full video][video-SVM]
+ - Run a pipeline on a video stream and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles. [watch full video][video-SVM]
 
-**2) YOLO**
+**2) YOLO Algorithm**
 
- - Construct a Keras network and implement a pre-trained model to predict in images.
- - Run a pipeline on a video stream and create a console to monitor lane status and detections. [see full video][video-yolo]
+ - Construct a Keras based neural network and implement a pre-trained model to predict images.
+ - Run a pipeline on a video stream and create a console to monitor lane status and detections. [watch full video][video-yolo]
 
 ### Usage
 
-`Project-SVM.py` and `helper.py` contain the code for SVM classifier stracture and pipeline.
-`dist.p` contains a trained SVM classifier based on YUV color features and HOG features with 17,000+ car and not-car pictures.
-`Project-yolo.py` and `helper_yolo.py` contain the code for Keras network and pipeline.
-`weights/yolo-tiny.weights` is a trained weight file (170 M) used for tiny yolo network.
+ - `Project-SVM.py` and `helper.py` contain the code for SVM classifier stracture and pipeline. 
+ - `dist.p` contains a trained SVM classifier based on YUV color features and HOG features with 17,000+ car and not-car pictures.
+ - `Project-yolo.py` and `helper_yolo.py` contain the code for Keras network and pipeline. 
 
 ### Dependencies
  - Numpy
@@ -55,14 +40,15 @@ The steps of this project are the following:
 
 SVM (Support Vector Machine) is a powerful machine learning technique. Here in this project it is trained and used for classification of car and not-car.
 
-#### 1. Collecting data
+#### 1. Collecting Data
 My main training data is downloaded from [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html) and [KITTI vision benchmark](http://www.cvlibs.net/datasets/kitti/) websites, which contain about 8700 pictures of car and 8900 of not-car. In addition, in order to increase detection accurancy, I create about 20 not-car pictures from video.
 
 ![car and not-car][img1]
 
-#### 2. Extracting features
+#### 2. Extracting Features
 
 I explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`) and made a comparison.
+
 
 | Color Space | Accuracy | Training Time (CPU) |
 |:--:|:--:|:--:|:--:|
@@ -72,61 +58,154 @@ I explored different color spaces and different `skimage.hog()` parameters (`ori
 | HLS | 98% | 60 s |
 | HSV | 97.8% | 112 s |
 
-I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
+The above table indicates that accuracy performance in different color space are almost same. Considering less false-positive, I chose `YUV` to extract color features.
 
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+Here is an example using the `YUV` color space and HOG parameters of `orientations=15`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
 
-
-![alt text][image2]
+![feature][img2]
 
 #### 3. Training classifier
+
+I trained a linear SVM using the following code:
+
+```
+car_features = extract_features(cars, color_space, orient, pix_per_cell, cell_per_block, spatial_feat=False, hist_feat=False, hog_channel=hog_channel)
+notcar_features = extract_features(notcars, color_space, orient, pix_per_cell, cell_per_block, spatial_feat=False, hist_feat=False, hog_channel=hog_channel)
+# Create an array stack of feature vectors
+X = np.vstack((car_features, notcar_features)).astype(np.float64)    
+# Fit a per-column scaler
+X_scaler = StandardScaler().fit(X)
+# Apply the scaler to X
+scaled_X = X_scaler.transform(X)
+
+# Define the labels vector
+y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+# Split up data into randomized training and test sets
+rand_state = np.random.randint(0, 100)
+X_train, X_test, y_train, y_test = train_test_split(
+    scaled_X, y, test_size=0.2, random_state=rand_state)
+# Use a linear SVC
+svc = LinearSVC()
+svc.fit(X_train, y_train)
+```
+
+Note that feature normalization through `sklearn.prepocessing.StandardScaler` is one of the key steps before training. Here is a comparison:
+
+![normalization][img3]
+
 #### 4. Sliding window
+
+An efficient method for sliding window search is applied, one that allows me to only have to extract the HOG features once.
+
+```
+def find_cars(img, ystart=400, ystop=656, scale=1.5):
+
+    draw_img = np.copy(img)
+    img = img.astype(np.float32) / 255
+
+    img_tosearch = img[ystart:ystop, :, :]
+    ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YUV')
+    cspace = 'YUV'
+    if scale != 1:
+        imshape = ctrans_tosearch.shape
+        ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1] / scale), np.int(imshape[0] / scale)))
+
+    ch1 = ctrans_tosearch[:, :, 0]
+    ch2 = ctrans_tosearch[:, :, 1]
+    ch3 = ctrans_tosearch[:, :, 2]
+
+    # Define blocks and steps as above
+    nxblocks = (ch1.shape[1] // pix_per_cell) - cell_per_block + 1
+    nyblocks = (ch1.shape[0] // pix_per_cell) - cell_per_block + 1
+    nfeat_per_block = orient * cell_per_block ** 2
+
+    # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
+    window = 64
+    nblocks_per_window = (window // pix_per_cell) - cell_per_block + 1
+    cells_per_step = 2  # Instead of overlap, define how many cells to step
+    nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
+    nysteps = (nyblocks - nblocks_per_window) // cells_per_step
+
+    # Compute individual channel HOG features for the entire image
+    hog1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, feature_vec=False)
+    hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
+    hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
+
+    bbox_list = []
+
+    for xb in range(nxsteps):
+        for yb in range(nysteps):
+            ypos = yb * cells_per_step
+            xpos = xb * cells_per_step
+            # Extract HOG for this patch
+            hog_feat1 = hog1[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
+            hog_feat2 = hog2[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
+            hog_feat3 = hog3[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
+            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+
+            xleft = xpos * pix_per_cell
+            ytop = ypos * pix_per_cell
+
+            # Extract the image patch
+            subimg = cv2.resize(ctrans_tosearch[ytop:ytop + window, xleft:xleft + window], (64, 64))
+
+            # Get color features
+            spatial_features = bin_spatial(subimg, color_space=cspace, size=spatial_size)
+            hist_features = color_hist(subimg, nbins=hist_bins)
+
+            # Scale features and make a prediction
+            test_features = X_scaler.transform(
+                np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
+            # test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
+            test_prediction = svc.predict(test_features)
+
+            if test_prediction == 1:
+                xbox_left = np.int(xleft * scale)
+                ytop_draw = np.int(ytop * scale)
+                win_draw = np.int(window * scale)
+                cv2.rectangle(draw_img, (xbox_left, ytop_draw + ystart),
+                              (xbox_left + win_draw, ytop_draw + win_draw + ystart), (0, 0, 255), 6)
+                bbox_list.append(((xbox_left, ytop_draw + ystart), (xbox_left + win_draw, ytop_draw + win_draw + ystart)))
+
+    return bbox_list, draw_img
+```
+
+Additionally, multiple-scaled search windows is applied with different scale values.
+
+![multi box][img4]
+
 #### 5. Filtering False-positive by heatmap
 
-####2. Explain how you settled on your final choice of HOG parameters.
+Heatmap with a certain threshold is a good helper to filter false positives and deal with multiple detections. I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.
 
-I tried various combinations of parameters and...
+```
+def add_heat(heatmap, bbox_list):
+    # Iterate through list of bboxes
+    for box in bbox_list:
+        # Add += 1 for all pixels inside each bbox
+        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
-####3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
+    return heatmap
+```
+```
+heatmap = threshold(heatmap, 2)
+labels = label(heatmap)
+```
 
-I trained a linear SVM using...
+![heatmap filter][img5]
 
-###Sliding Window Search
+![label][img6]
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
+#### 6. Video Implementation
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+Video stream is a series of image process with the techniques above. In order to make detection between frames more smooth, I built a simple historical heatmap queue to set up connections.
 
-![alt text][image3]
-
-####2. Show some Image of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
-
-![alt text][image4]
----
-
-### Video Implementation
-
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
-
-
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
-
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
-
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
+```
+history = deque(maxlen=8)
+current_heatmap = np.clip(heat, 0, 255)
+history.append(current_heatmap)
+```
 
 ### **2) YOLO Algorithm**
 
@@ -135,11 +214,14 @@ Here's an example result showing the heatmap from a series of frames of video, t
 #### 1. Principle
 
 YOLO uses an unified single neural network, which makes full use of the whole image infomation as bounding box identification and classification. It divides the image into an *SxS* grid and for each grid celll predicts *B* bounding boxes, confidence for those boxes, and *C* class probailities. The output is a 1470 vector, containing probability, confidence and box coordinates. 
-![model][image8]
+![model][img8]
 
 It has 20 classes as the following:
 ```
-classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+classes = ["aeroplane", "bicycle", "bird", "boat", "bottle",
+"bus", "car", "cat", "chair", "cow", 
+"diningtable", "dog", "horse", "motorbike", "person", 
+"pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 ```
 
 In this project, I used tiny YOLO v1 as it is easy to implement and impressively fast.
@@ -215,24 +297,54 @@ Non-trainable params: 0
 ____________________________________________________________________________________________________
 ```
 
-Then to load the pre-trained weights ([link](https://github.com/uranus4ever/Vehicle-Detection/tree/master/weights/yolo-tiny.weights)) from website as network training is really time consuming.
+Then to load the pre-trained weights (172 MB, [link](https://drive.google.com/file/d/0B1tW_VtY7onibmdQWE1zVERxcjQ/view?usp=sharing)) from website as network training is really time-consuming.
 
 After weight loading, detected bounding boxes could be draw onto the images and finally applied into video stream pipeline with a confidence *threshold=0.2*.
 
-![find_car][image9]
+![find_car][img9]
 
 ---
 
-### Reflection
+## Reflection
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+### 1. Discussion
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+SVM has an acceptable accuracy of detection, however, it has two shorcomings:
 
-### Reference
+ 1. Due to heatmap threshold application, the bounding box usually appears unstable and smaller than the actual size of object cars.
+ 2. The processing speed is only up to 2 fps on account of sliding window search. Even with GPU parallel computing, it is not favorable for real-time application.
+
+YOLO is much more preferable by reason of its strength against SVM's shortcomings:
+
+ 1. Better detection and more stable bounding box position.
+ 2. Real-time processing speed, nearly 40 fps.
+
+Note that the limitation of YOLO is as follows:
+
+ 1. Only two boxes and one class in each grid are predicted, which causes detection accuracy of adjacent objects decreases. 
+ 2. YOLO is learned from pre-trained data. As a result, it performs poor with new objects or usual view angle.
+
+### 2. Next Plan
+
+ 1. As the false detection types of YOLO and Fast R-CNN are different, we can integrate these two models to enhance performance.
+ 2. Explore YOLO to more videos to try other classifications in addition to cars.
+
+## Reference
 1. J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, [You Only Look Once: Unified, Real-Time Object Detection](https://arxiv.org/pdf/1506.02640), arXiv:1506.02640 (2015).
 2. [dark flow](https://github.com/thtrieu/darkflow) 
 3. [yolo_tensorflow](https://github.com/hizhangp/yolo_tensorflow)
-3. [xslittlegrass](https://github.com/xslittlegrass/CarND-Vehicle-Detection)
-4. [JunshengFu](https://github.com/JunshengFu/vehicle-detection)
+3. [YOLO Introduction](https://zhuanlan.zhihu.com/p/25045711)
 
+[//]: # (Image References)
+[img1]: ./Image/car_not_car.PNG
+[img2]: ./Image/feature.jpg
+[img3]: ./Image/Normalize_Feature_HSV.png
+[img4]: ./Image/find_car.png
+[img5]: ./Image/heatmap1.png
+[img6]: ./Image/heatmap.png
+[img7]: 
+[img8]: ./Image/yolo-box.PNG
+[img9]: ./Image/find_car_yolo.png
+[gif]: ./Image/yolo.gif
+[video-SVM]: ./project_video.mp4
+[video-yolo]: ./project_video.mp4

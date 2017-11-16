@@ -454,7 +454,8 @@ def SVM_combine_classify(cars, notcars, csapce='LUV', samples=300):
             'spatial_size': (spatial, spatial),
             'hist_bins': histbin,
             'Test Accuracy': round(svc.score(X_test, y_test), 4),
-            'Training Time': round(t2 - t, 2)}
+            'Training Time': round(t2 - t, 2),
+            'color_space': color_space}
 
     return dist
 
@@ -799,11 +800,11 @@ def predict(dist_pickle):
 if __name__ == "__main__":
     img = mpimg.imread('./test_img/test6.jpg')
 
-    scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
-
-    dist = SVM_combine_classify(cars, notcars, csapce='YUV', samples=-1)
-    pickle.dump(dist, open("./dist.p", "wb"))
-    print('pickle saved!')
+    # scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
+    #
+    # dist = SVM_combine_classify(cars, notcars, csapce='YUV', samples=-1)
+    # pickle.dump(dist, open("./dist.p", "wb"))
+    # print('pickle saved!')
 
     # dist_pickle = pickle.load(open("dist.p", "rb"))
 
