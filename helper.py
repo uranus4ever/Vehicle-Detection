@@ -149,15 +149,15 @@ def convert_color(img, conv='RGB2YUV'):
 
 
 # Define a function to return HOG features and visualization
-def get_hog_features(image, orient=9, pix_per_cell=8, cell_per_block=2, vis=False, feature_vec=True):
-
+def get_hog_features(ch, orient=9, pix_per_cell=8, cell_per_block=2, vis=False, feature_vec=True):
+    # image is a channel of image
     if vis is True:
-        features, hog_image = hog(image, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
+        features, hog_image = hog(ch, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
                                   cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=False,
                                   visualise=True, feature_vector=False, block_norm="L2-Hys")
         plt.figure()
         plt.subplot(121)
-        plt.imshow(image, cmap='gray')
+        plt.imshow(ch, cmap='gray')
         plt.title('L channel')
         plt.subplot(122)
         plt.imshow(hog_image, cmap='gray')
@@ -166,7 +166,7 @@ def get_hog_features(image, orient=9, pix_per_cell=8, cell_per_block=2, vis=Fals
 
         return features, hog_image
     else:
-        features = hog(image, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
+        features = hog(ch, orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell),
                        cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=False,
                        visualise=False, feature_vector=feature_vec, block_norm="L2-Hys")
         return features
@@ -326,7 +326,6 @@ def SVM_HOG_classify(cars, notcars, samples=300):
     cars = cars[0:samples]
     notcars = notcars[0:samples]
 
-    # TODO: Tweak these parameters and see how the results change.
     colorspace = 'YUV'  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
     orient = 9
     pix_per_cell = 8
@@ -778,29 +777,54 @@ def add_non_car():
     return flags
 
 
-def predict(dist_pickle):
-    svc = dist_pickle["svc"]
-    X_scaler = dist_pickle["X_scaler"]
-    input_path = './test_img/add_non-car_64/'
-    images = glob.glob(input_path + '*.png')
-    preds = []
-    for img_path in images:
-        img = mpimg.imread(img_path)
-        spatial_features = bin_spatial(img, color_space='LUV', size=32)
-        hist_features = color_hist(img, nbins=32)
-        convert_img = convert_color(img, 'RGB2LUV')
-        hog_features = get_hog_features(convert_img, feature_vec=False)
-        test_features = X_scaler.transform(
-            np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
-        test_prediction = svc.predict(test_features)
-        preds.append(test_prediction)
-    print('Prediction:     ', preds)
+def draw_feature(car, notcar, cspace='RGB2YUV'):
+    car_pic = convert_color(mpimg.imread(car), conv=cspace)
+    notcar_pic = convert_color(mpimg.imread(notcar), conv=cspace)
+
+    orient = 15
+    pix_per_cell = 8
+    cell_per_block = 2
+    spatial_size = (32, 32)
+
+    car_chs = [car_pic[:, :, 0], car_pic[:, :, 1], car_pic[:, :, 2]]
+    notcat_chs = [notcar_pic[:, :, 0], notcar_pic[:, :, 1], notcar_pic[:, :, 2]]
+
+    f, hog1_car = get_hog_features(car_chs[0], orient, pix_per_cell, cell_per_block, vis=True, feature_vec=False)
+    f, hog1_notcar = get_hog_features(notcat_chs[0], orient, pix_per_cell, cell_per_block, vis=True, feature_vec=False)
+
+    car_hist = np.histogram(car_pic[:, :, 0], bins=32, range=(0, 256))
+    notcar_hist = np.histogram(notcar_pic[:, :, 0], bins=32, range=(0, 256))
+    bin_edges = car_hist[1]
+    bin_centers = (bin_edges[1:] + bin_edges[0:len(bin_edges) - 1]) / 2
+
+    car_ch1_features = cv2.resize(car_chs[0], spatial_size)
+    car_ch2_features = cv2.resize(car_chs[1], spatial_size)
+    car_ch3_features = cv2.resize(car_chs[2], spatial_size)
+    notcar_ch1_features = cv2.resize(notcat_chs[0], spatial_size)
+    notcar_ch2_features = cv2.resize(notcat_chs[1], spatial_size)
+    notcar_ch3_features = cv2.resize(notcat_chs[2], spatial_size)
+
+    titles = ['CAR CH-1', 'CAR CH-1 HOG', 'NOT CAR CH-1', 'NOT CAR CH-1 HOG',
+             'CAR CH-1', 'CAR CH-1 FEATURES', 'NOT CAR CH-1', 'NOT CAR CH-1 FEATURES',
+             'CAR CH-2', 'CAR CH-2 FEATURES', 'NOT CAR CH-2', 'NOT CAR CH-2 FEATURES',
+             'CAR CH-3', 'CAR CH-3 FEATURES', 'NOT CAR CH-3', 'NOT CAR CH-3 FEATURES']
+    pic = [car_chs[0], hog1_car, notcat_chs[0], hog1_notcar,
+           car_chs[0], car_ch1_features, notcat_chs[0], notcar_ch1_features,
+           car_chs[1], car_ch2_features, notcat_chs[1], notcar_ch2_features,
+           car_chs[2], car_ch3_features, notcat_chs[2], notcar_ch3_features]
+
+    f, axes = plt.subplots(4, 4, figsize=(10, 8))
+    f.tight_layout()
+    for idx, ax in enumerate(np.hstack(axes)):
+        ax.imshow(pic[idx])
+        ax.set_title(titles[idx])
+        ax.axis('off')
     return
 
 if __name__ == "__main__":
     img = mpimg.imread('./test_img/test6.jpg')
 
-    # scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
+    scaled_X, cars, notcars = combine_feature(cspace='YUV', samples=20)
     #
     # dist = SVM_combine_classify(cars, notcars, csapce='YUV', samples=-1)
     # pickle.dump(dist, open("./dist.p", "wb"))
